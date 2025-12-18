@@ -290,12 +290,12 @@
         "operation": "appendOrUpdate",
         "documentId": {
           "__rl": true,
-          "value": "={{ $json._searchParams.spreadsheetId }}",
+          "value": "={{ $('Create User Sheet').first().json.spreadsheetId }}",
           "mode": "id"
         },
         "sheetName": {
           "__rl": true,
-          "value": "={{ $json._searchParams.sheetTitle }}",
+          "value": "={{ $('Create User Sheet').first().json.sheets[0].properties.title }}",
           "mode": "name"
         },
         "columns": {
