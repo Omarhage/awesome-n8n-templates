@@ -276,8 +276,7 @@
     },
     {
       "parameters": {
-        "mode": "combine",
-        "combineBy": "combineAll",
+        "mode": "append",
         "options": {}
       },
       "id": "merge-results",
@@ -352,7 +351,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Get pagination info from first item (all items have same pagination metadata)\nconst allItems = $input.item.json.data || [];\nconst firstItem = allItems[0] || {};\n\nconst hasMore = firstItem._hasMore || false;\nconst nextPageToken = firstItem._nextPageToken || null;\nconst currentPage = firstItem._currentPage || 1;\nconst searchParams = firstItem._searchParams || {};\n\nconsole.log(`📊 Page ${currentPage} saved. Has more pages: ${hasMore}`);\n\nif (hasMore && nextPageToken) {\n  return {\n    shouldContinue: true,\n    searchQuery: searchParams.searchQuery,\n    city: searchParams.city,\n    businessType: searchParams.businessType,\n    userEmail: searchParams.userEmail,\n    spreadsheetId: searchParams.spreadsheetId,\n    spreadsheetUrl: searchParams.spreadsheetUrl,\n    sheetTitle: searchParams.sheetTitle,\n    currentPage: currentPage + 1,\n    maxPages: searchParams.maxPages || 5,\n    nextPageToken: nextPageToken,\n    isPaginationRun: true\n  };\n}\n\nreturn {\n  shouldContinue: false,\n  spreadsheetUrl: searchParams.spreadsheetUrl,\n  userEmail: searchParams.userEmail,\n  businessType: searchParams.businessType,\n  city: searchParams.city\n};"
+        "jsCode": "// Get pagination info from aggregated data\n// The aggregate node puts items in a 'data' array\nconst aggregatedData = $input.item.json;\nconst allItems = aggregatedData.data || [aggregatedData];\nconst firstItem = allItems[0] || {};\n\n// Get searchParams - try from item first, then fallback to Initialize Search Params\nlet searchParams = firstItem._searchParams;\nif (!searchParams || !searchParams.userEmail) {\n  try {\n    searchParams = $('Initialize Search Params').first().json;\n  } catch (e) {\n    searchParams = {};\n  }\n}\n\nconst hasMore = firstItem._hasMore || false;\nconst nextPageToken = firstItem._nextPageToken || null;\nconst currentPage = firstItem._currentPage || 1;\n\nconsole.log(`📊 Page ${currentPage} saved. Has more: ${hasMore}. Items: ${allItems.length}`);\n\nif (hasMore && nextPageToken) {\n  return {\n    shouldContinue: true,\n    searchQuery: searchParams.searchQuery,\n    city: searchParams.city,\n    businessType: searchParams.businessType,\n    userEmail: searchParams.userEmail,\n    spreadsheetId: searchParams.spreadsheetId,\n    spreadsheetUrl: searchParams.spreadsheetUrl,\n    sheetTitle: searchParams.sheetTitle,\n    currentPage: currentPage + 1,\n    maxPages: searchParams.maxPages || 5,\n    nextPageToken: nextPageToken,\n    isPaginationRun: true\n  };\n}\n\nreturn {\n  shouldContinue: false,\n  spreadsheetUrl: searchParams.spreadsheetUrl,\n  userEmail: searchParams.userEmail,\n  businessType: searchParams.businessType,\n  city: searchParams.city\n};"
       },
       "id": "check-more-pages",
       "name": "Check More Pages",
@@ -409,7 +408,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Handle empty results - check for more pages\nconst item = $input.item.json;\nconst searchParams = item._searchParams || {};\nconst hasMore = item._hasMore || false;\nconst nextPageToken = item._nextPageToken || null;\nconst currentPage = item._currentPage || 1;\n\nconsole.log(`📭 No places on page ${currentPage}. Has more: ${hasMore}`);\n\nif (hasMore && nextPageToken) {\n  return {\n    shouldContinue: true,\n    ...searchParams,\n    currentPage: currentPage + 1,\n    nextPageToken: nextPageToken,\n    isPaginationRun: true\n  };\n}\n\nreturn {\n  shouldContinue: false,\n  spreadsheetUrl: searchParams.spreadsheetUrl,\n  userEmail: searchParams.userEmail,\n  businessType: searchParams.businessType,\n  city: searchParams.city\n};"
+        "jsCode": "// Handle empty results - check for more pages\nconst item = $input.item.json;\n\n// Get searchParams with fallback\nlet searchParams = item._searchParams;\nif (!searchParams || !searchParams.userEmail) {\n  try {\n    searchParams = $('Initialize Search Params').first().json;\n  } catch (e) {\n    searchParams = {};\n  }\n}\n\nconst hasMore = item._hasMore || false;\nconst nextPageToken = item._nextPageToken || null;\nconst currentPage = item._currentPage || 1;\n\nconsole.log(`📭 No places on page ${currentPage}. Has more: ${hasMore}`);\n\nif (hasMore && nextPageToken) {\n  return {\n    shouldContinue: true,\n    ...searchParams,\n    currentPage: currentPage + 1,\n    nextPageToken: nextPageToken,\n    isPaginationRun: true\n  };\n}\n\nreturn {\n  shouldContinue: false,\n  spreadsheetUrl: searchParams.spreadsheetUrl,\n  userEmail: searchParams.userEmail,\n  businessType: searchParams.businessType,\n  city: searchParams.city\n};"
       },
       "id": "handle-empty-page",
       "name": "Handle Empty Page",
