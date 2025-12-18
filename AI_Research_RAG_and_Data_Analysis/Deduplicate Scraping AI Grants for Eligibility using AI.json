@@ -440,10 +440,30 @@
 "parameters": {
 "url": "https://apply07.grants.gov/grantsws/rest/opportunities/search",
 "method": "POST",
-"options": {},
-"jsonBody": "{\n \"keyword\": \"ai\",\n \"cfda\": null,\n \"agencies\": null,\n \"sortBy\": \"openDate|desc\",\n \"rows\": 5000,\n \"eligibilities\": null,\n \"fundingCategories\": null,\n \"fundingInstruments\": null,\n \"dateRange\": \"1\",\n \"oppStatuses\": \"forecasted|posted\"\n}",
+"options": {
+"pagination": {
+"paginationMode": "off"
+}
+},
+"jsonBody": "{\n \"keyword\": \"ai\",\n \"cfda\": null,\n \"agencies\": null,\n \"sortBy\": \"openDate|desc\",\n \"rows\": 100,\n \"startRecordNum\": 0,\n \"eligibilities\": null,\n \"fundingCategories\": null,\n \"fundingInstruments\": null,\n \"dateRange\": \"1\",\n \"oppStatuses\": \"forecasted|posted\"\n}",
 "sendBody": true,
-"specifyBody": "json"
+"specifyBody": "json",
+"pagination": {
+"paginationMode": "update",
+"paginationCompleteWhen": "other",
+"completeExpression": "={{ $response.body.oppHits.length === 0 || $request.body.startRecordNum >= $response.body.hitCount }}",
+"limitPagesFetched": true,
+"maxRequests": 50,
+"parameters": {
+"parameters": [
+{
+"name": "startRecordNum",
+"type": "body",
+"value": "={{ $response.body.oppHits.length + ($request.body.startRecordNum || 0) }}"
+}
+]
+}
+}
 },
 "typeVersion": 4.2
 },
