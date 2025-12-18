@@ -1,0 +1,941 @@
+{
+  "name": "🗺️ Google Maps Lead Scraper (Optimized)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "lead-scraper-form",
+        "formTitle": "🗺️ Google Maps Lead Scraper",
+        "formDescription": "Enter your search criteria and we'll scrape Google Maps for business leads and email them to you!",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Your Email",
+              "fieldType": "email",
+              "placeholder": "you@example.com",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Business Type",
+              "placeholder": "e.g., Dentist, Plumber, Real Estate Agent, Restaurant",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "City/Location",
+              "placeholder": "e.g., Dubai, Los Angeles, London",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Additional Keywords (Optional)",
+              "placeholder": "e.g., luxury, emergency, 24 hour"
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false,
+          "respondWithOptions": {
+            "values": {
+              "formSubmittedText": "✅ Your scraping request has been submitted! Check your email for updates."
+            }
+          }
+        }
+      },
+      "id": "form-trigger",
+      "name": "Lead Scraper Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "position": [-864, 2752],
+      "typeVersion": 2.1,
+      "webhookId": "lead-scraper-form"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build optimized Google Places search query from form inputs\nconst formData = $input.item.json;\n\nconst businessType = formData['Business Type']?.trim() || '';\nconst city = formData['City/Location']?.trim() || '';\nconst additionalKeywords = formData['Additional Keywords (Optional)']?.trim() || '';\nconst userEmail = formData['Your Email']?.trim() || '';\n\n// Validate required fields\nif (!businessType || !city || !userEmail) {\n  throw new Error('Missing required fields: Business Type, City/Location, or Email');\n}\n\n// Build search query - Google Places works best with simple queries\nlet searchParts = [businessType];\nif (additionalKeywords) {\n  searchParts.push(additionalKeywords);\n}\nsearchParts.push(city);\n\n// Join with + for URL compatibility\nconst searchQuery = searchParts.join('+').replace(/\\s+/g, '+');\n\n// Generate unique sheet name based on search\nconst timestamp = new Date().toISOString().slice(0, 10);\nconst sheetName = `${businessType} - ${city} - ${timestamp}`.substring(0, 50);\n\nreturn {\n  searchQuery,\n  city,\n  businessType,\n  userEmail,\n  sheetName,\n  submittedAt: new Date().toISOString(),\n  // Initialize pagination state\n  currentPage: 1,\n  maxPages: 5,\n  nextPageToken: null\n};"
+      },
+      "id": "build-search-query",
+      "name": "Build Search Query",
+      "type": "n8n-nodes-base.code",
+      "position": [-640, 2752],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "resource": "spreadsheet",
+        "title": "={{ $json.sheetName }}",
+        "options": {}
+      },
+      "id": "create-user-sheet",
+      "name": "Create User Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [-416, 2752],
+      "typeVersion": 4.4,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HtvdW7vp2wb1UMG0",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare initial search parameters with spreadsheet info\nconst buildQuery = $('Build Search Query').item.json;\nconst createSheet = $('Create User Sheet').item.json;\n\nreturn {\n  searchQuery: buildQuery.searchQuery,\n  city: buildQuery.city,\n  businessType: buildQuery.businessType,\n  userEmail: buildQuery.userEmail,\n  currentPage: 1,\n  maxPages: 5,\n  nextPageToken: null,\n  spreadsheetId: createSheet.spreadsheetId,\n  spreadsheetUrl: createSheet.spreadsheetUrl,\n  sheetTitle: createSheet.sheets?.[0]?.properties?.title || 'Sheet1'\n};"
+      },
+      "id": "init-search-params",
+      "name": "Initialize Search Params",
+      "type": "n8n-nodes-base.code",
+      "position": [-192, 2752],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.userEmail }}",
+        "subject": "🚀 Your Google Maps Scrape Has Started!",
+        "message": "=<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;\">\n  <h2 style=\"color: #4A90A4;\">🗺️ Scraping In Progress!</h2>\n  \n  <p>Hey there!</p>\n  \n  <p>Your lead scraping request is now running. Here's what we're searching for:</p>\n  \n  <table style=\"background: #f5f5f5; padding: 15px; border-radius: 8px; width: 100%;\">\n    <tr><td><strong>Business Type:</strong></td><td>{{ $json.businessType }}</td></tr>\n    <tr><td><strong>Location:</strong></td><td>{{ $json.city }}</td></tr>\n    <tr><td><strong>Started At:</strong></td><td>{{ $now.format('MMM dd, yyyy hh:mm a') }}</td></tr>\n  </table>\n  \n  <p style=\"margin-top: 20px;\">⏱️ <strong>Estimated time:</strong> 2-5 minutes depending on how many businesses we find.</p>\n  \n  <p>You'll receive another email with your completed results once scraping is done!</p>\n  \n  <div style=\"margin: 20px 0; padding: 15px; background: #e8f5e9; border-radius: 8px;\">\n    <p style=\"margin: 0;\"><strong>📊 Your Google Sheet:</strong></p>\n    <p style=\"margin: 10px 0 0 0;\"><a href=\"{{ $json.spreadsheetUrl }}\" style=\"color: #4285F4;\">{{ $json.spreadsheetUrl }}</a></p>\n  </div>\n  \n  <hr style=\"margin: 20px 0; border: none; border-top: 1px solid #eee;\">\n  \n  <p style=\"color: #888; font-size: 12px;\">Powered by Omar's AI Bot🤖</p>\n</div>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "send-started-email",
+      "name": "Send Started Email",
+      "type": "n8n-nodes-base.gmail",
+      "position": [32, 2752],
+      "typeVersion": 2.1,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "fvtEyb1r3opGBOnT",
+          "name": "Omar's Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create User Sheet').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "11zgkJ1e1pW46A5r5kNoWIvHHNhr5t3vR",
+          "mode": "list",
+          "cachedResultName": "User's Scraped Spreadsheets",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/11zgkJ1e1pW46A5r5kNoWIvHHNhr5t3vR"
+        }
+      },
+      "id": "move-file",
+      "name": "Move to Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [256, 2752],
+      "typeVersion": 3,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Lk5GrCzAD9rnlptx",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle both first run and pagination runs\nconst input = $input.item.json;\n\n// If coming from pagination loop, use that data\nif (input.isPaginationRun) {\n  return input;\n}\n\n// First run - get data from Initialize Search Params\nconst searchParams = $('Initialize Search Params').item.json;\nreturn {\n  ...searchParams,\n  isPaginationRun: false\n};"
+      },
+      "id": "prepare-api-request",
+      "name": "Prepare API Request",
+      "type": "n8n-nodes-base.code",
+      "position": [480, 2752],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://places.googleapis.com/v1/places:searchText",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Goog-Api-Key",
+              "value": "AIzaSyBZT6wElNgiIjsFe6wk7TqXHRxNTnyVG8M"
+            },
+            {
+              "name": "X-Goog-FieldMask",
+              "value": "places.displayName,places.formattedAddress,places.websiteUri,places.nationalPhoneNumber,nextPageToken"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"textQuery\": \"{{ $json.searchQuery }}\",\n  \"maxResultCount\": 20\n  {{ $json.nextPageToken ? ', \"pageToken\": \"' + $json.nextPageToken + '\"' : '' }}\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "get-places-from-google",
+      "name": "Get Places from Google",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [704, 2752],
+      "typeVersion": 4.2,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract places and handle API response\nconst response = $input.item.json;\nconst searchParams = $('Prepare API Request').item.json;\n\n// Check for API errors\nif (response.error || !response.places) {\n  console.log('⚠️ Google Places API error or no results');\n  return [{\n    json: {\n      places: [],\n      hasMore: false,\n      searchParams: searchParams,\n      error: response.error?.message || 'No places found'\n    }\n  }];\n}\n\nconst places = response.places || [];\nconst nextPageToken = response.nextPageToken || null;\nconst currentPage = searchParams.currentPage || 1;\nconst maxPages = searchParams.maxPages || 5;\n\nconsole.log(`📍 Found ${places.length} places on page ${currentPage}`);\n\n// Process places into clean format\nconst processedPlaces = places.map(place => ({\n  displayName: place.displayName?.text || place.displayName || 'Unknown',\n  formattedAddress: place.formattedAddress || '',\n  nationalPhoneNumber: place.nationalPhoneNumber || '',\n  websiteUri: place.websiteUri || ''\n}));\n\nreturn [{\n  json: {\n    places: processedPlaces,\n    hasMore: !!(nextPageToken && currentPage < maxPages),\n    nextPageToken: nextPageToken,\n    currentPage: currentPage,\n    searchParams: {\n      ...searchParams,\n      currentPage: currentPage + 1,\n      nextPageToken: nextPageToken\n    }\n  }\n}];"
+      },
+      "id": "process-places-response",
+      "name": "Process Places Response",
+      "type": "n8n-nodes-base.code",
+      "position": [928, 2752],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split places into individual items for processing\nconst data = $input.item.json;\nconst places = data.places || [];\nconst searchParams = data.searchParams;\n\nif (places.length === 0) {\n  return [{\n    json: {\n      isEmpty: true,\n      searchParams: searchParams\n    }\n  }];\n}\n\n// Output each place as separate item with search context\nreturn places.map(place => ({\n  json: {\n    ...place,\n    city: searchParams.city,\n    spreadsheetId: searchParams.spreadsheetId,\n    spreadsheetUrl: searchParams.spreadsheetUrl,\n    sheetTitle: searchParams.sheetTitle,\n    userEmail: searchParams.userEmail,\n    businessType: searchParams.businessType\n  }\n}));"
+      },
+      "id": "split-places",
+      "name": "Split Places to Items",
+      "type": "n8n-nodes-base.code",
+      "position": [1152, 2752],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "filter-empty",
+              "leftValue": "={{ $json.isEmpty }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-places",
+      "name": "Has Places?",
+      "type": "n8n-nodes-base.if",
+      "position": [1376, 2752],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "filter-schema",
+              "leftValue": "={{ $json.websiteUri }}",
+              "rightValue": "schema",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            },
+            {
+              "id": "filter-google",
+              "leftValue": "={{ $json.websiteUri }}",
+              "rightValue": "google.com",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            },
+            {
+              "id": "filter-gstatic",
+              "leftValue": "={{ $json.websiteUri }}",
+              "rightValue": "gstatic",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-google-urls",
+      "name": "Filter Invalid URLs",
+      "type": "n8n-nodes-base.filter",
+      "position": [1600, 2752],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "has-website",
+              "leftValue": "={{ $json.websiteUri }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-website",
+      "name": "Has Website?",
+      "type": "n8n-nodes-base.if",
+      "position": [1824, 2752],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "id": "batch-websites",
+      "name": "Batch Websites (5)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [2048, 2656],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.websiteUri }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "scrape-website",
+      "name": "Scrape Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [2272, 2560],
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract emails from scraped HTML\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const html = item.json.data || '';\n  const businessName = item.json.displayName || 'Unknown';\n  const address = item.json.formattedAddress || '';\n  const phone = item.json.nationalPhoneNumber || '';\n  const website = item.json.websiteUri || '';\n  const city = item.json.city || '';\n  \n  // Check if scrape was successful\n  const scrapeSuccess = html && html.length > 100 && !item.json.error;\n  \n  if (!scrapeSuccess) {\n    results.push({\n      json: {\n        businessName,\n        address,\n        phone,\n        website,\n        city,\n        emails: '',\n        emailsFound: 0,\n        primaryEmail: '',\n        scrapeStatus: 'failed'\n      }\n    });\n    continue;\n  }\n  \n  // Extract emails using regex\n  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/gi;\n  const emails = html.match(emailRegex) || [];\n  \n  // Filter out junk emails\n  const junkPatterns = [\n    'example', 'domain.com', 'email.com', 'sentry', 'wixpress',\n    'google.com', 'facebook.com', 'wix.com', 'wordpress.com',\n    'squarespace.com', 'mysite.com', 'noreply', 'no-reply',\n    'placeholder', '.png', '.jpg', '.gif', '.svg', '.webp',\n    'test@', 'user@', 'admin@example', 'support@wix'\n  ];\n  \n  const uniqueEmails = [...new Set(emails)].filter(email => {\n    const lower = email.toLowerCase();\n    return !junkPatterns.some(pattern => lower.includes(pattern));\n  });\n  \n  results.push({\n    json: {\n      businessName,\n      address,\n      phone,\n      website,\n      city,\n      emails: uniqueEmails.join(', '),\n      emailsFound: uniqueEmails.length,\n      primaryEmail: uniqueEmails[0] || '',\n      scrapeStatus: 'success'\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "extract-emails",
+      "name": "Extract Emails",
+      "type": "n8n-nodes-base.code",
+      "position": [2496, 2560],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "business-name",
+              "name": "businessName",
+              "value": "={{ $json.displayName }}",
+              "type": "string"
+            },
+            {
+              "id": "address",
+              "name": "address",
+              "value": "={{ $json.formattedAddress }}",
+              "type": "string"
+            },
+            {
+              "id": "phone",
+              "name": "phone",
+              "value": "={{ $json.nationalPhoneNumber }}",
+              "type": "string"
+            },
+            {
+              "id": "city",
+              "name": "city",
+              "value": "={{ $json.city }}",
+              "type": "string"
+            },
+            {
+              "id": "website",
+              "name": "website",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "emails",
+              "name": "emails",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "emails-found",
+              "name": "emailsFound",
+              "value": 0,
+              "type": "number"
+            },
+            {
+              "id": "primary-email",
+              "name": "primaryEmail",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "scrape-status",
+              "name": "scrapeStatus",
+              "value": "no_website",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "format-no-website",
+      "name": "Format No Website",
+      "type": "n8n-nodes-base.set",
+      "position": [2048, 2848],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {},
+      "id": "merge-results",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "position": [2720, 2752],
+      "typeVersion": 3.2
+    },
+    {
+      "parameters": {
+        "options": {
+          "compareMode": "allFields"
+        }
+      },
+      "id": "remove-duplicates",
+      "name": "Remove Duplicates",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "position": [2944, 2752],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Initialize Search Params').item.json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $('Initialize Search Params').item.json.sheetTitle }}",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": ["businessName"],
+          "schema": [
+            {
+              "id": "businessName",
+              "displayName": "businessName",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "address",
+              "displayName": "address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "website",
+              "displayName": "website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "city",
+              "displayName": "city",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "emails",
+              "displayName": "emails",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "emailsFound",
+              "displayName": "emailsFound",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "primaryEmail",
+              "displayName": "primaryEmail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "scrapeStatus",
+              "displayName": "scrapeStatus",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "save-to-sheets",
+      "name": "Save to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [3168, 2752],
+      "typeVersion": 4.4,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HtvdW7vp2wb1UMG0",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if we should fetch more pages\nconst processedResponse = $('Process Places Response').item.json;\nconst searchParams = processedResponse.searchParams;\n\nif (processedResponse.hasMore && processedResponse.nextPageToken) {\n  console.log(`📄 Fetching page ${searchParams.currentPage}...`);\n  return [{\n    json: {\n      shouldContinue: true,\n      ...searchParams,\n      isPaginationRun: true\n    }\n  }];\n}\n\nconsole.log('✅ All pages processed!');\nreturn [{\n  json: {\n    shouldContinue: false,\n    spreadsheetUrl: searchParams.spreadsheetUrl,\n    userEmail: searchParams.userEmail,\n    businessType: searchParams.businessType,\n    city: searchParams.city\n  }\n}];"
+      },
+      "id": "check-more-pages",
+      "name": "Check More Pages",
+      "type": "n8n-nodes-base.code",
+      "position": [3392, 2752],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "should-continue",
+              "leftValue": "={{ $json.shouldContinue }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "more-pages",
+      "name": "More Pages?",
+      "type": "n8n-nodes-base.if",
+      "position": [3616, 2752],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "amount": 1.5
+      },
+      "id": "wait-between-pages",
+      "name": "Wait Between Pages",
+      "type": "n8n-nodes-base.wait",
+      "position": [3840, 2656],
+      "typeVersion": 1.1,
+      "webhookId": "pagination-wait"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.userEmail }}",
+        "subject": "✅ Your Google Maps Leads Are Ready!",
+        "message": "=<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;\">\n  <h2 style=\"color: #2E7D32;\">🎉 Scraping Complete!</h2>\n  \n  <p>Great news! Your lead scraping is finished.</p>\n  \n  <table style=\"background: #f5f5f5; padding: 15px; border-radius: 8px; width: 100%;\">\n    <tr><td><strong>Business Type:</strong></td><td>{{ $json.businessType }}</td></tr>\n    <tr><td><strong>Location:</strong></td><td>{{ $json.city }}</td></tr>\n  </table>\n  \n  <div style=\"margin: 25px 0; text-align: center;\">\n    <a href=\"{{ $json.spreadsheetUrl }}\" style=\"background: #4285F4; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;\">📊 Open Your Google Sheet</a>\n  </div>\n  \n  <p><strong>What's in your sheet:</strong></p>\n  <ul>\n    <li>✅ Business names & addresses</li>\n    <li>✅ Phone numbers</li>\n    <li>✅ Websites</li>\n    <li>✅ Email addresses (where found)</li>\n  </ul>\n  \n  <p style=\"margin-top: 20px;\">💡 <strong>Pro tip:</strong> Some businesses may not have emails listed on their website. Try reaching out via phone or their contact form!</p>\n  \n  <hr style=\"margin: 20px 0; border: none; border-top: 1px solid #eee;\">\n  \n  <p style=\"color: #888; font-size: 12px;\">Enjoyed this tool? Share it with others! 🚀</p>\n</div>",
+        "options": {}
+      },
+      "id": "send-completion-email",
+      "name": "Send Completion Email",
+      "type": "n8n-nodes-base.gmail",
+      "position": [3840, 2848],
+      "typeVersion": 2.1,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "fvtEyb1r3opGBOnT",
+          "name": "Omar's Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 1
+      },
+      "id": "wait-rate-limit",
+      "name": "Rate Limit Wait",
+      "type": "n8n-nodes-base.wait",
+      "position": [2272, 2752],
+      "typeVersion": 1.1,
+      "webhookId": "rate-limit-wait"
+    }
+  ],
+  "connections": {
+    "Lead Scraper Form": {
+      "main": [
+        [
+          {
+            "node": "Build Search Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Search Query": {
+      "main": [
+        [
+          {
+            "node": "Create User Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create User Sheet": {
+      "main": [
+        [
+          {
+            "node": "Initialize Search Params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Search Params": {
+      "main": [
+        [
+          {
+            "node": "Send Started Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Started Email": {
+      "main": [
+        [
+          {
+            "node": "Move to Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move to Folder": {
+      "main": [
+        [
+          {
+            "node": "Prepare API Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare API Request": {
+      "main": [
+        [
+          {
+            "node": "Get Places from Google",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Places from Google": {
+      "main": [
+        [
+          {
+            "node": "Process Places Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Places Response": {
+      "main": [
+        [
+          {
+            "node": "Split Places to Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Places to Items": {
+      "main": [
+        [
+          {
+            "node": "Has Places?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Places?": {
+      "main": [
+        [
+          {
+            "node": "Filter Invalid URLs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check More Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Invalid URLs": {
+      "main": [
+        [
+          {
+            "node": "Has Website?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Website?": {
+      "main": [
+        [
+          {
+            "node": "Batch Websites (5)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format No Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Websites (5)": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scrape Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Website": {
+      "main": [
+        [
+          {
+            "node": "Extract Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Emails": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format No Website": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Rate Limit Wait": {
+      "main": [
+        [
+          {
+            "node": "Batch Websites (5)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Save to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Check More Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check More Pages": {
+      "main": [
+        [
+          {
+            "node": "More Pages?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "More Pages?": {
+      "main": [
+        [
+          {
+            "node": "Wait Between Pages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Completion Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Between Pages": {
+      "main": [
+        [
+          {
+            "node": "Prepare API Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c3b901d3912b7d66a8ae86eae735fff8f39a8500a7cb4d0a9b27b314814aed90"
+  }
+}
