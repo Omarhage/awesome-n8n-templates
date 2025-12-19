@@ -16,13 +16,17 @@
             },
             {
               "fieldLabel": "Business Type",
-              "placeholder": "e.g., Dentist, Plumber, Real Estate Agent, Restaurant",
+              "placeholder": "e.g., Dentist, Plumber, Real Estate Agent, Jewelry Store",
               "requiredField": true
             },
             {
-              "fieldLabel": "City/Location",
-              "placeholder": "e.g., Dubai, Los Angeles, London",
+              "fieldLabel": "Country",
+              "placeholder": "e.g., Lebanon, United Arab Emirates, United States",
               "requiredField": true
+            },
+            {
+              "fieldLabel": "City (Optional)",
+              "placeholder": "e.g., Beirut, Dubai, Los Angeles (leave empty to search entire country)"
             },
             {
               "fieldLabel": "Additional Keywords (Optional)",
@@ -48,7 +52,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const formData = $input.item.json;\n\nconst businessType = formData['Business Type']?.trim() || '';\nconst city = formData['City/Location']?.trim() || '';\nconst additionalKeywords = formData['Additional Keywords (Optional)']?.trim() || '';\nconst userEmail = formData['Your Email']?.trim() || '';\n\nif (!businessType || !city || !userEmail) {\n  throw new Error('Missing required fields');\n}\n\nlet searchParts = [businessType];\nif (additionalKeywords) searchParts.push(additionalKeywords);\nsearchParts.push(city);\n\nconst searchQuery = searchParts.join('+').replace(/\\s+/g, '+');\nconst timestamp = new Date().toISOString().slice(0, 10);\nconst sheetName = `${businessType} - ${city} - ${timestamp}`.substring(0, 50);\n\nreturn {\n  searchQuery,\n  city,\n  businessType,\n  userEmail,\n  sheetName,\n  submittedAt: new Date().toISOString(),\n  currentPage: 1,\n  maxPages: 5,\n  nextPageToken: null\n};"
+        "jsCode": "const formData = $input.item.json;\n\nconst businessType = formData['Business Type']?.trim() || '';\nconst country = formData['Country']?.trim() || '';\nconst city = formData['City (Optional)']?.trim() || '';\nconst additionalKeywords = formData['Additional Keywords (Optional)']?.trim() || '';\nconst userEmail = formData['Your Email']?.trim() || '';\n\nif (!businessType || !country || !userEmail) {\n  throw new Error('Missing required fields: Business Type, Country, and Email are required');\n}\n\n// Build a natural language query for better Google Places results\n// Format: \"Jewelry Stores in Beirut, Lebanon\" or \"Jewelry Stores in Lebanon\"\nlet locationPart = city ? `${city}, ${country}` : country;\nlet searchQuery = `${businessType} in ${locationPart}`;\nif (additionalKeywords) {\n  searchQuery = `${additionalKeywords} ${searchQuery}`;\n}\n\n// For sheet naming\nconst timestamp = new Date().toISOString().slice(0, 10);\nconst locationName = city || country;\nconst sheetName = `${businessType} - ${locationName} - ${timestamp}`.substring(0, 50);\n\nreturn {\n  searchQuery,\n  city: city || country,\n  country,\n  businessType,\n  userEmail,\n  sheetName,\n  submittedAt: new Date().toISOString(),\n  currentPage: 1,\n  maxPages: 5,\n  nextPageToken: null\n};"
       },
       "id": "build-search-query",
       "name": "Build Search Query",
@@ -88,7 +92,7 @@
       "parameters": {
         "sendTo": "={{ $json.userEmail }}",
         "subject": "🚀 Your Google Maps Scrape Has Started!",
-        "message": "=<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;\">\n  <h2 style=\"color: #4A90A4;\">🗺️ Scraping In Progress!</h2>\n  <p>Your lead scraping request is now running.</p>\n  <table style=\"background: #f5f5f5; padding: 15px; border-radius: 8px; width: 100%;\">\n    <tr><td><strong>Business Type:</strong></td><td>{{ $json.businessType }}</td></tr>\n    <tr><td><strong>Location:</strong></td><td>{{ $json.city }}</td></tr>\n  </table>\n  <p style=\"margin-top: 20px;\">⏱️ <strong>Estimated time:</strong> 2-5 minutes</p>\n  <div style=\"margin: 20px 0; padding: 15px; background: #e8f5e9; border-radius: 8px;\">\n    <p style=\"margin: 0;\"><strong>📊 Your Google Sheet:</strong></p>\n    <p style=\"margin: 10px 0 0 0;\"><a href=\"{{ $json.spreadsheetUrl }}\" style=\"color: #4285F4;\">{{ $json.spreadsheetUrl }}</a></p>\n  </div>\n  <p style=\"color: #888; font-size: 12px;\">Powered by Omar's AI Bot🤖</p>\n</div>",
+        "message": "=<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;\">\n  <h2 style=\"color: #4A90A4;\">🗺️ Scraping In Progress!</h2>\n  <p>Your lead scraping request is now running.</p>\n  <table style=\"background: #f5f5f5; padding: 15px; border-radius: 8px; width: 100%;\">\n    <tr><td><strong>Business Type:</strong></td><td>{{ $json.businessType }}</td></tr>\n    <tr><td><strong>Location:</strong></td><td>{{ $json.city }}, {{ $json.country }}</td></tr>\n    <tr><td><strong>Search Query:</strong></td><td>{{ $json.searchQuery }}</td></tr>\n  </table>\n  <p style=\"margin-top: 20px;\">⏱️ <strong>Estimated time:</strong> 2-5 minutes</p>\n  <div style=\"margin: 20px 0; padding: 15px; background: #e8f5e9; border-radius: 8px;\">\n    <p style=\"margin: 0;\"><strong>📊 Your Google Sheet:</strong></p>\n    <p style=\"margin: 10px 0 0 0;\"><a href=\"{{ $json.spreadsheetUrl }}\" style=\"color: #4285F4;\">{{ $json.spreadsheetUrl }}</a></p>\n  </div>\n  <p style=\"color: #888; font-size: 12px;\">Powered by Omar's AI Bot🤖</p>\n</div>",
         "options": { "appendAttribution": false }
       },
       "id": "send-started-email",
