@@ -287,6 +287,16 @@
     },
     {
       "parameters": {
+        "jsCode": "// Clean data before saving to Google Sheets\n// 1. Remove internal _ prefixed fields (they pollute the sheet)\n// 2. Filter out invalid/Unknown businesses\n\nconst items = $input.all();\nconst cleanedItems = [];\n\nfor (const item of items) {\n  const data = item.json;\n  \n  // Skip invalid entries\n  if (!data.businessName || data.businessName === 'Unknown' || data.businessName.trim() === '') {\n    console.log('⏭️ Skipping invalid entry:', data.businessName);\n    continue;\n  }\n  \n  // Create clean object with ONLY the fields we want in Google Sheets\n  // NO _ prefixed internal fields!\n  cleanedItems.push({\n    json: {\n      businessName: data.businessName,\n      address: data.address || '',\n      phone: data.phone || '',\n      website: data.website || '',\n      city: data.city || '',\n      emails: data.emails || '',\n      emailsFound: data.emailsFound || 0,\n      primaryEmail: data.primaryEmail || '',\n      scrapeStatus: data.scrapeStatus || 'unknown'\n    }\n  });\n}\n\nconsole.log(`✅ Cleaned ${items.length} items → ${cleanedItems.length} valid items`);\n\n// If no valid items, return empty placeholder\nif (cleanedItems.length === 0) {\n  return [{ json: { businessName: '[No valid results found]', scrapeStatus: 'no_results' } }];\n}\n\nreturn cleanedItems;"
+      },
+      "id": "clean-data",
+      "name": "Clean Data for Sheets",
+      "type": "n8n-nodes-base.code",
+      "position": [2384, 2752],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
         "operation": "appendOrUpdate",
         "documentId": {
           "__rl": true,
@@ -351,7 +361,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Get pagination info from aggregated data\n// The aggregate node puts items in a 'data' array\nconst aggregatedData = $input.item.json;\nconst allItems = aggregatedData.data || [aggregatedData];\nconst firstItem = allItems[0] || {};\n\n// Get searchParams - try from item first, then fallback to Initialize Search Params\nlet searchParams = firstItem._searchParams;\nif (!searchParams || !searchParams.userEmail) {\n  try {\n    searchParams = $('Initialize Search Params').first().json;\n  } catch (e) {\n    searchParams = {};\n  }\n}\n\nconst hasMore = firstItem._hasMore || false;\nconst nextPageToken = firstItem._nextPageToken || null;\nconst currentPage = firstItem._currentPage || 1;\n\nconsole.log(`📊 Page ${currentPage} saved. Has more: ${hasMore}. Items: ${allItems.length}`);\n\nif (hasMore && nextPageToken) {\n  return {\n    shouldContinue: true,\n    searchQuery: searchParams.searchQuery,\n    city: searchParams.city,\n    businessType: searchParams.businessType,\n    userEmail: searchParams.userEmail,\n    spreadsheetId: searchParams.spreadsheetId,\n    spreadsheetUrl: searchParams.spreadsheetUrl,\n    sheetTitle: searchParams.sheetTitle,\n    currentPage: currentPage + 1,\n    maxPages: searchParams.maxPages || 5,\n    nextPageToken: nextPageToken,\n    isPaginationRun: true\n  };\n}\n\nreturn {\n  shouldContinue: false,\n  spreadsheetUrl: searchParams.spreadsheetUrl,\n  userEmail: searchParams.userEmail,\n  businessType: searchParams.businessType,\n  city: searchParams.city\n};"
+        "jsCode": "// Get pagination info from earlier nodes (not aggregated data, which is cleaned)\n// Read from source nodes that still have the original data\n\n// Get search params from Initialize Search Params\nconst searchParams = $('Initialize Search Params').first().json;\n\n// Get pagination info from Google API response\nconst googleResponse = $('Get Places from Google').first().json;\nconst nextPageToken = googleResponse.nextPageToken || null;\n\n// Get current page from Prepare API Request\nconst prepareRequest = $('Prepare API Request').first().json;\nconst currentPage = prepareRequest.currentPage || 1;\nconst maxPages = prepareRequest.maxPages || 5;\n\n// Check if we should continue\nconst hasMore = !!(nextPageToken && currentPage < maxPages);\n\nconsole.log(`📊 Page ${currentPage} complete. Has more: ${hasMore}`);\n\nif (hasMore) {\n  return {\n    shouldContinue: true,\n    searchQuery: searchParams.searchQuery,\n    city: searchParams.city,\n    businessType: searchParams.businessType,\n    userEmail: searchParams.userEmail,\n    spreadsheetId: searchParams.spreadsheetId,\n    spreadsheetUrl: searchParams.spreadsheetUrl,\n    sheetTitle: searchParams.sheetTitle,\n    currentPage: currentPage + 1,\n    maxPages: maxPages,\n    nextPageToken: nextPageToken,\n    isPaginationRun: true\n  };\n}\n\nreturn {\n  shouldContinue: false,\n  spreadsheetUrl: searchParams.spreadsheetUrl,\n  userEmail: searchParams.userEmail,\n  businessType: searchParams.businessType,\n  city: searchParams.city\n};"
       },
       "id": "check-more-pages",
       "name": "Check More Pages",
@@ -408,7 +418,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Handle empty results - check for more pages\nconst item = $input.item.json;\n\n// Get searchParams with fallback\nlet searchParams = item._searchParams;\nif (!searchParams || !searchParams.userEmail) {\n  try {\n    searchParams = $('Initialize Search Params').first().json;\n  } catch (e) {\n    searchParams = {};\n  }\n}\n\nconst hasMore = item._hasMore || false;\nconst nextPageToken = item._nextPageToken || null;\nconst currentPage = item._currentPage || 1;\n\nconsole.log(`📭 No places on page ${currentPage}. Has more: ${hasMore}`);\n\nif (hasMore && nextPageToken) {\n  return {\n    shouldContinue: true,\n    ...searchParams,\n    currentPage: currentPage + 1,\n    nextPageToken: nextPageToken,\n    isPaginationRun: true\n  };\n}\n\nreturn {\n  shouldContinue: false,\n  spreadsheetUrl: searchParams.spreadsheetUrl,\n  userEmail: searchParams.userEmail,\n  businessType: searchParams.businessType,\n  city: searchParams.city\n};"
+        "jsCode": "// Handle empty results - check for more pages\n// Get pagination info from source nodes\n\nconst searchParams = $('Initialize Search Params').first().json;\nconst googleResponse = $('Get Places from Google').first().json;\nconst prepareRequest = $('Prepare API Request').first().json;\n\nconst nextPageToken = googleResponse.nextPageToken || null;\nconst currentPage = prepareRequest.currentPage || 1;\nconst maxPages = prepareRequest.maxPages || 5;\nconst hasMore = !!(nextPageToken && currentPage < maxPages);\n\nconsole.log(`📭 Empty page ${currentPage}. Has more: ${hasMore}`);\n\nif (hasMore) {\n  return {\n    shouldContinue: true,\n    searchQuery: searchParams.searchQuery,\n    city: searchParams.city,\n    businessType: searchParams.businessType,\n    userEmail: searchParams.userEmail,\n    spreadsheetId: searchParams.spreadsheetId,\n    spreadsheetUrl: searchParams.spreadsheetUrl,\n    sheetTitle: searchParams.sheetTitle,\n    currentPage: currentPage + 1,\n    maxPages: maxPages,\n    nextPageToken: nextPageToken,\n    isPaginationRun: true\n  };\n}\n\nreturn {\n  shouldContinue: false,\n  spreadsheetUrl: searchParams.spreadsheetUrl,\n  userEmail: searchParams.userEmail,\n  businessType: searchParams.businessType,\n  city: searchParams.city\n};"
       },
       "id": "handle-empty-page",
       "name": "Handle Empty Page",
@@ -470,6 +480,9 @@
       "main": [[{ "node": "Merge All Results", "type": "main", "index": 1 }]]
     },
     "Merge All Results": {
+      "main": [[{ "node": "Clean Data for Sheets", "type": "main", "index": 0 }]]
+    },
+    "Clean Data for Sheets": {
       "main": [[{ "node": "Save to Google Sheets", "type": "main", "index": 0 }]]
     },
     "Save to Google Sheets": {
