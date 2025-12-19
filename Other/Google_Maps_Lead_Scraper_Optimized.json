@@ -239,6 +239,7 @@
     },
     {
       "parameters": {
+        "mode": "runOnceForEachItem",
         "jsCode": "// Preserve business data before HTTP request (which might lose it)\nconst item = $input.item.json;\n\nreturn {\n  ...item,\n  _preserved: {\n    displayName: item.displayName,\n    formattedAddress: item.formattedAddress,\n    nationalPhoneNumber: item.nationalPhoneNumber,\n    websiteUri: item.websiteUri,\n    city: item.city\n  }\n};"
       },
       "id": "preserve-data",
@@ -266,6 +267,7 @@
     },
     {
       "parameters": {
+        "mode": "runOnceForEachItem",
         "jsCode": "// Extract emails from scraped HTML\n// Read business data from _preserved field (set before HTTP request)\nconst item = $input.item.json;\n\n// Get HTML from response\nconst html = item.data || item.body || '';\n\n// Get preserved business data (saved before HTTP request overwrote original fields)\nconst preserved = item._preserved || {};\nconst businessName = preserved.displayName || item.displayName || 'Unknown';\nconst address = preserved.formattedAddress || item.formattedAddress || '';\nconst phone = preserved.nationalPhoneNumber || item.nationalPhoneNumber || '';\nconst website = preserved.websiteUri || item.websiteUri || '';\nconst city = preserved.city || item.city || '';\n\nconsole.log(`📧 Processing: ${businessName} - Website: ${website}`);\nconsole.log(`📦 Preserved data exists: ${!!item._preserved}`);\n\n// Check if scrape was successful\nconst scrapeSuccess = html && typeof html === 'string' && html.length > 100 && !item.error;\n\nif (!scrapeSuccess) {\n  console.log(`❌ Scrape failed for ${businessName}: ${item.error || 'No/short response'}`);\n  return {\n    businessName,\n    address,\n    phone,\n    website,\n    city,\n    emails: '',\n    emailsFound: 0,\n    primaryEmail: '',\n    scrapeStatus: 'failed'\n  };\n}\n\n// Extract emails\nconst emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/gi;\nconst emails = html.match(emailRegex) || [];\n\n// Filter junk emails\nconst junkPatterns = [\n  'example', 'domain.com', 'email.com', 'sentry', 'wixpress',\n  'google.com', 'facebook.com', 'wix.com', 'wordpress.com',\n  'squarespace.com', 'mysite.com', 'noreply', 'no-reply',\n  'placeholder', '.png', '.jpg', '.gif', '.svg', '.webp',\n  'test@', 'user@', 'admin@example', 'support@wix'\n];\n\nconst uniqueEmails = [...new Set(emails)].filter(email => {\n  const lower = email.toLowerCase();\n  return !junkPatterns.some(pattern => lower.includes(pattern));\n});\n\nconsole.log(`✅ ${businessName}: Found ${uniqueEmails.length} emails`);\n\nreturn {\n  businessName,\n  address,\n  phone,\n  website,\n  city,\n  emails: uniqueEmails.join(', '),\n  emailsFound: uniqueEmails.length,\n  primaryEmail: uniqueEmails[0] || '',\n  scrapeStatus: 'success'\n};"
       },
       "id": "extract-emails",
@@ -276,6 +278,7 @@
     },
     {
       "parameters": {
+        "mode": "runOnceForEachItem",
         "jsCode": "// Format businesses without websites\nconst item = $input.item.json;\n\nconst businessName = item.displayName || 'Unknown';\nconsole.log(`📭 No website for: ${businessName}`);\n\nreturn {\n  businessName,\n  address: item.formattedAddress || '',\n  phone: item.nationalPhoneNumber || '',\n  website: '',\n  city: item.city || '',\n  emails: '',\n  emailsFound: 0,\n  primaryEmail: '',\n  scrapeStatus: 'no_website'\n};"
       },
       "id": "format-no-website",
